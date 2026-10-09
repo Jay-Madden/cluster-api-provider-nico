@@ -154,12 +154,22 @@ func exampleSnapshot() string {
 	return snapshot.String()
 }
 
-// instanceCreatesSince counts instance creations the fake NICo logged since t.
-func instanceCreatesSince(t time.Time) int {
-	out, err := kubectl("logs", "deployment/fake-nico-api", "-n", fakeNamespace,
-		"--since-time="+t.UTC().Format(time.RFC3339))
+// instanceCreates counts the instance creations the fake NICo has logged. The
+// fake runs for the whole suite, so the count only grows. Comparing counts
+// needs no clock, unlike a --since-time window, which has whole-second
+// precision and compares the host's clock with the cluster's.
+func instanceCreates() int {
+	out, err := kubectl("logs", "deployment/fake-nico-api", "-n", fakeNamespace)
 	Expect(err).NotTo(HaveOccurred())
 	return strings.Count(out, "POST /v2/org/org-1/nico/instance ")
+}
+
+// expectNoInstanceCreates fails if the fake NICo logged an instance creation
+// after instanceCreates returned instancesBefore.
+func expectNoInstanceCreates(instancesBefore int) {
+	instancesAfter := instanceCreates()
+	Expect(instancesAfter).To(BeNumerically(">=", instancesBefore), "the fake NICo log restarted during the upgrade")
+	Expect(instancesAfter).To(Equal(instancesBefore), "the upgrade must not create instances")
 }
 
 // removeExampleCluster deletes the cluster first, while the provider and its
@@ -200,7 +210,7 @@ var _ = Describe("Helm upgrade from the previous release", Ordered, Label("upgra
 	})
 
 	It("keeps the previous release's clusters unchanged through helm upgrade", func() {
-		upgraded := time.Now()
+		instancesBefore := instanceCreates()
 		Expect(helmInstall("./chart", managerImageRepository, managerImageTag,
 			[]string{"--leader-elect"})).To(Succeed())
 		waitForManager()
@@ -210,7 +220,7 @@ var _ = Describe("Helm upgrade from the previous release", Ordered, Label("upgra
 
 		waitForExampleCluster()
 		Expect(exampleSnapshot()).To(Equal(before))
-		Expect(instanceCreatesSince(upgraded)).To(BeZero(), "the upgrade must not create instances")
+		expectNoInstanceCreates(instancesBefore)
 	})
 
 	It("observes the default credentials once an Identity is created after the upgrade", func() {
@@ -294,7 +304,7 @@ var _ = Describe("Release bundle upgrade from the previous release", Ordered, La
 	})
 
 	It("keeps the previous release's clusters unchanged through clusterctl upgrade", func() {
-		upgraded := time.Now()
+		instancesBefore := instanceCreates()
 		_, err := clusterctl(config, "upgrade", "apply", "--infrastructure", "nico:"+bundleVersion,
 			"--wait-providers")
 		Expect(err).NotTo(HaveOccurred())
@@ -305,7 +315,7 @@ var _ = Describe("Release bundle upgrade from the previous release", Ordered, La
 
 		waitForExampleCluster()
 		Expect(exampleSnapshot()).To(Equal(before))
-		Expect(instanceCreatesSince(upgraded)).To(BeZero(), "the upgrade must not create instances")
+		expectNoInstanceCreates(instancesBefore)
 	})
 
 	It("observes the default credentials once an Identity is created after the upgrade", func() {

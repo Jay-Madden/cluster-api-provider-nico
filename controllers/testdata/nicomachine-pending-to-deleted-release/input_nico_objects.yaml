@@ -1,0 +1,10 @@
+instances:
+  resources:
+  - org: org-1
+    resource:
+      id: instance-1
+      name: machine-1
+      status: Terminating
+      siteId: site-1
+      vpcId: vpc-1
+      tenantId: tenant-1

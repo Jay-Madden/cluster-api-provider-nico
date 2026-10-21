@@ -45,10 +45,14 @@ func nicoMachineCaseSet(description, dirPrefix string, defineSteps func(*fixture
 		Setup: func(ctx ginkgo.SpecContext, tc *fixture.Case, _ fixture.CaseSet) {
 			tc.IncludeEvent = func(event eventsv1.Event) bool {
 				return event.ReportingController == "nicomachine-controller" &&
-					event.Regarding.Kind == "Machine" && event.Regarding.Name == testOwnerMachine
+					((event.Regarding.Kind == "Machine" && event.Regarding.Name == testOwnerMachine) ||
+						(event.Regarding.Kind == "NicoMachine" && event.Regarding.Name == testMachine))
 			}
 			tc.Client = client.WithFieldOwner(tc.Client, "capnico-envtest")
 			gomega.Expect(tc.CreateObjects(ctx)).To(gomega.Succeed())
+			if tc.HasInput("input_initial_delete.yaml") {
+				gomega.Expect(tc.PatchObjects(ctx, "input_initial_delete.yaml")).To(gomega.Succeed())
+			}
 			gomega.Expect(applyMachineStatusFixture(ctx, tc)).To(gomega.Succeed())
 			gomega.Expect(applyNicoMachineStatusFixture(ctx, tc)).To(gomega.Succeed())
 			workloadFactory, workloadClient, err := seedWorkloadClient(tc)
@@ -77,8 +81,12 @@ func nicoMachineCaseSet(description, dirPrefix string, defineSteps func(*fixture
 				return server.Dump()
 			})
 
-			endpoint := startFake(server)
+			endpoint := startFakeForCase(server, tc)
 			gomega.Expect(pointIdentitySecretsAtFake(ctx, tc.Client, endpoint)).To(gomega.Succeed())
+			if tc.HasInput("input_initial_delete.yaml") {
+				_, err := tc.DeleteObjects(ctx, "input_initial_delete.yaml")
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			}
 			startReconcilers(ctx, tc, workloadFactory)
 		},
 		DefineSteps: defineSteps,
@@ -202,6 +210,55 @@ var _ = fixture.DescribeCaseSet(nicoMachineCaseSet(
 					err := tc.Client.Get(ctx, client.ObjectKeyFromObject(object), actual)
 					g.Expect(apierrors.IsNotFound(err)).To(gomega.BeTrue())
 				}
+			}).WithTimeout(timeout).WithPolling(time.Second).Should(gomega.Succeed())
+		})
+	},
+))
+
+var _ = fixture.DescribeCaseSet(nicoMachineCaseSet(
+	"NicoMachine ready to pending deletion reconciliation",
+	"nicomachine-ready-to-pending-",
+	func(tc *fixture.Case, _ fixture.CaseSet) {
+		ginkgo.It("reconciles the ready NicoMachine", func(ctx ginkgo.SpecContext) {
+			gomega.Eventually(func(g gomega.Gomega) {
+				machine := &infrav1.NicoMachine{}
+				g.Expect(tc.Client.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testMachine}, machine)).To(gomega.Succeed())
+				provisioned := conditions.Get(machine, infrav1.MachineProvisionedCondition)
+				g.Expect(provisioned).NotTo(gomega.BeNil())
+				g.Expect(provisioned.Status).To(gomega.Equal(metav1.ConditionTrue))
+				g.Expect(machine.Generation).To(gomega.Equal(int64(2)))
+				g.Expect(provisioned.ObservedGeneration).To(gomega.Equal(machine.Generation))
+			}).WithTimeout(timeout).WithPolling(time.Second).Should(gomega.Succeed())
+		})
+
+		ginkgo.It("requests deletion", func(ctx ginkgo.SpecContext) {
+			_, err := tc.DeleteObjects(ctx, "input_delete.yaml")
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		})
+
+		ginkgo.It("reconciles the pending deletion", func(ctx ginkgo.SpecContext) {
+			gomega.Eventually(func(g gomega.Gomega) {
+				machine := &infrav1.NicoMachine{}
+				g.Expect(tc.Client.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testMachine}, machine)).To(gomega.Succeed())
+				g.Expect(machine.DeletionTimestamp.IsZero()).To(gomega.BeFalse())
+				deleting := conditions.Get(machine, clusterv1.DeletingCondition)
+				g.Expect(deleting).NotTo(gomega.BeNil())
+				g.Expect(deleting.Status).To(gomega.Equal(metav1.ConditionTrue))
+				g.Expect(deleting.ObservedGeneration).To(gomega.Equal(machine.Generation))
+			}).WithTimeout(timeout).WithPolling(time.Second).Should(gomega.Succeed())
+		})
+	},
+))
+
+var _ = fixture.DescribeCaseSet(nicoMachineCaseSet(
+	"NicoMachine pending to deleted reconciliation",
+	"nicomachine-pending-to-deleted-",
+	func(tc *fixture.Case, _ fixture.CaseSet) {
+		ginkgo.It("reconciles the completed deletion", func(ctx ginkgo.SpecContext) {
+			gomega.Eventually(func(g gomega.Gomega) {
+				machine := &infrav1.NicoMachine{}
+				err := tc.Client.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testMachine}, machine)
+				g.Expect(apierrors.IsNotFound(err)).To(gomega.BeTrue())
 			}).WithTimeout(timeout).WithPolling(time.Second).Should(gomega.Succeed())
 		})
 	},

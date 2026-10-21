@@ -207,11 +207,12 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			log.Info("adopting existing NICo instance", "instanceID", instance.GetId())
 			nicoMachine.Status.InstanceID = instance.GetId()
 			nicoMachine.Spec.ProviderID = nico.ProviderID(instance.GetId())
+			r.instanceEvent(&nicoMachine, "InstanceAdopted", "Adopt", fmt.Sprintf("Adopted NICo instance %s", instance.GetId()))
 			// Persist providerID and its new generation before a reboot can
 			// interrupt normal status reconciliation.
 			return ctrl.Result{RequeueAfter: machineRequeueFast}, nil
 		} else if !errors.Is(err, nico.ErrNotFound) {
-			setMachineProvisionedFalse(&nicoMachine, infrav1.InstanceCreateFailedReason, err.Error())
+			setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, infrav1.InstanceCreateFailedReason), err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to find existing instance before create: %w", err)
 		}
 	}
@@ -250,7 +251,7 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		tenantID, err := nicoClient.ResolveTenantID(ctx)
 		if err != nil {
-			setMachineProvisionedFalse(&nicoMachine, infrav1.TenantResolutionFailedReason, err.Error())
+			setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, infrav1.TenantResolutionFailedReason), err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to resolve tenant ID: %w", err)
 		}
 
@@ -261,7 +262,7 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			// check avoids spamming the NICo API logs with errors, and changes the re-queue interval.
 			availability, err := instanceTypeAvailable(ctx, nicoClient, nicoMachine.Spec.InstanceTypeID)
 			if err != nil {
-				setMachineProvisionedFalse(&nicoMachine, infrav1.AvailabilityCheckFailedReason, err.Error())
+				setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, infrav1.AvailabilityCheckFailedReason), err.Error())
 				return ctrl.Result{}, fmt.Errorf("failed to check instance type availability: %w", err)
 			}
 			instanceTypeCapabilities = nicomachine.ParseInstanceTypeCapabilities(availability.instanceType)
@@ -292,6 +293,7 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			FailureDomain: failureDomain,
 			LabelKey:      nicoCluster.Spec.FailureDomainLabelKey,
 		})
+		created := err == nil
 		if err != nil {
 			if errors.Is(err, nico.ErrAlreadyExists) {
 				log.Info("backing NICo instance already exists, find by name")
@@ -314,13 +316,18 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					// NOTE: This reason is not in allowlisted in capacityWaitReasons that prioritize control-plane machines
 					reason = infrav1.InstanceCreateRequestInvalidReason
 				}
-				setMachineProvisionedFalse(&nicoMachine, reason, err.Error())
+				setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, reason), err.Error())
 				return ctrl.Result{}, fmt.Errorf("failed to create or find instance: %w", err)
 			}
 		}
 
 		nicoMachine.Status.InstanceID = instance.GetId()
 		nicoMachine.Spec.ProviderID = nico.ProviderID(instance.GetId())
+		if created {
+			r.instanceEvent(&nicoMachine, "InstanceCreated", "Create", fmt.Sprintf("Created NICo instance %s", instance.GetId()))
+		} else {
+			r.instanceEvent(&nicoMachine, "InstanceAdopted", "Adopt", fmt.Sprintf("Adopted NICo instance %s", instance.GetId()))
+		}
 
 		// Written before the first poll, so a restart resumes this instance rather
 		// than creating a second one for the same Machine.
@@ -334,6 +341,9 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	instance, err := nicoClient.GetInstance(ctx, instanceID)
 	if err != nil {
+		if reason := nicoErrorReason(err, ""); reason != "" {
+			setMachineProvisionedFalse(&nicoMachine, reason, err.Error())
+		}
 		if errors.Is(err, nico.ErrNotFound) {
 			setMachineProvisionedFalse(&nicoMachine, infrav1.InstanceMissingReason, err.Error())
 			return ctrl.Result{}, fmt.Errorf("backing NICo instance %q was not found: %w", instanceID, err)
@@ -355,7 +365,7 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if instanceTypeID := instance.GetInstanceTypeId(); instanceTypeID != "" {
 			instanceType, err = nicoClient.GetInstanceTypeWithAllocationStats(ctx, instanceTypeID)
 			if err != nil {
-				setMachineProvisionedFalse(&nicoMachine, clusterv1.InspectionFailedReason, fmt.Sprintf("failed to inspect instance type: %s", err.Error()))
+				setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, clusterv1.InspectionFailedReason), fmt.Sprintf("failed to inspect instance type: %s", err.Error()))
 				return ctrl.Result{}, nil
 			}
 		}
@@ -364,12 +374,13 @@ func (r *NicoMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 		nicoMachine.Status.InstanceID = instance.GetId()
+		r.instanceEvent(&nicoMachine, "InstanceAdopted", "Adopt", fmt.Sprintf("Adopted NICo instance %s", instance.GetId()))
 	}
 
 	requestedDomain := ownerMachine.Spec.FailureDomain
 	observedDomain, err := observeFailureDomain(ctx, nicoClient, &nicoMachine, nicoCluster.Spec.FailureDomainLabelKey, instance, requestedDomain)
 	if err != nil {
-		setMachineProvisionedFalse(&nicoMachine, infrav1.FailureDomainVerificationFailedReason, err.Error())
+		setMachineProvisionedFalse(&nicoMachine, nicoErrorReason(err, infrav1.FailureDomainVerificationFailedReason), err.Error())
 		return ctrl.Result{}, fmt.Errorf("failed to verify machine failure domain: %w", err)
 	}
 
@@ -513,16 +524,24 @@ func (r *NicoMachineReconciler) releaseInstance(ctx context.Context, nicoClient 
 	instance, err := nicoClient.GetInstance(ctx, instanceID)
 	if errors.Is(err, nico.ErrNotFound) {
 		log.Info("NICo instance is released", "instanceID", instanceID)
+		r.instanceEvent(nicoMachine, "InstanceDeleted", "Delete", fmt.Sprintf("NICo instance %s is released", instanceID))
 		nicoMachine.Status.InstanceID = ""
 		return true, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("delete NicoMachine: failed to get NICo instance: %w", err)
 	}
+	conditions.Set(nicoMachine, metav1.Condition{
+		Type:    clusterv1.DeletingCondition,
+		Status:  metav1.ConditionTrue,
+		Reason:  clusterv1.DeletingReason,
+		Message: fmt.Sprintf("Waiting for NICo instance release; observed status is %s", nico.InstanceStatus(instance)),
+	})
 
 	switch {
 	case nico.IsTerminated(instance):
 		log.Info("NICo instance is released", "instanceID", instanceID, "status", nico.InstanceStatus(instance))
+		r.instanceEvent(nicoMachine, "InstanceDeleted", "Delete", fmt.Sprintf("NICo instance %s is released", instanceID))
 		nicoMachine.Status.InstanceID = ""
 		return true, nil
 	case nico.IsTerminating(instance):
@@ -536,12 +555,22 @@ func (r *NicoMachineReconciler) releaseInstance(ctx context.Context, nicoClient 
 	} else {
 		log.Info("deleting NICo instance", "instanceID", instanceID)
 	}
-	if err := nicoClient.DeleteInstance(ctx, instanceID, healthIssue); err != nil && !errors.Is(err, nico.ErrNotFound) {
-		return false, fmt.Errorf("delete NicoMachine: failed to delete NICo instance: %w", err)
+	if err := nicoClient.DeleteInstance(ctx, instanceID, healthIssue); err != nil {
+		if !errors.Is(err, nico.ErrNotFound) {
+			return false, fmt.Errorf("delete NicoMachine: failed to delete NICo instance: %w", err)
+		}
+	} else {
+		r.instanceEvent(nicoMachine, "InstanceDeletionRequested", "Delete", fmt.Sprintf("Requested deletion of NICo instance %s", instanceID))
 	}
 	log.Info("requested NICo instance deletion", "instanceID", instanceID)
 
 	return false, nil
+}
+
+func (r *NicoMachineReconciler) instanceEvent(machine *infrav1.NicoMachine, reason, action, message string) {
+	if r.Recorder != nil {
+		r.Recorder.Eventf(machine, nil, corev1.EventTypeNormal, reason, action, "%s", message)
+	}
 }
 
 func (r *NicoMachineReconciler) machineHealthIssue(ctx context.Context, ownerMachine *clusterv1.Machine, instanceID string) *nicosdk.MachineHealthIssue {

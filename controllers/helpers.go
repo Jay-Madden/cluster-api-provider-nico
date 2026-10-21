@@ -5,6 +5,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"maps"
@@ -27,6 +28,17 @@ import (
 )
 
 var defaultNicoClientCache = nico.NewClientCache()
+
+func nicoErrorReason(err error, fallback string) string {
+	switch {
+	case errors.Is(err, nico.ErrTLSVerifyFailed):
+		return infrav1.TLSVerifyFailedReason
+	case errors.Is(err, nico.ErrEndpointUnreachable):
+		return infrav1.EndpointUnreachableReason
+	default:
+		return fallback
+	}
+}
 
 func bootstrapCloudConfigFromSecret(secret *corev1.Secret) (string, error) {
 	if b, ok := secret.Data["value"]; ok && len(b) > 0 {

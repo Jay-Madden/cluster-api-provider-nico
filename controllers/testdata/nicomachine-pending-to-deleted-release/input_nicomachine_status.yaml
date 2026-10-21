@@ -1,0 +1,15 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: NicoMachine
+metadata:
+  name: nicomachine-1
+  namespace: default
+status:
+  instanceID: instance-1
+  initialization:
+    provisioned: true
+  conditions:
+  - type: MachineProvisioned
+    status: "True"
+    reason: InstanceReady
+    observedGeneration: 2
+    lastTransitionTime: "1970-01-01T00:00:00Z"

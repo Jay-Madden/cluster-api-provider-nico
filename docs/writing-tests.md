@@ -15,6 +15,10 @@ state, not workflow scripts. Four rules follow from that.
 
 ## Fixtures and Goldens
 
+The machine cases include this controller's events on both the owning `Machine`
+and the case's `NicoMachine` in `expected_objects.yaml`. Reboot events belong to
+`Machine`, and instance lifecycle events belong to `NicoMachine`.
+
 Two rules govern where golden state lives and how you regenerate it.
 
 - Keep Kubernetes and NICo goldens together. `expected_objects.yaml` covers
@@ -23,6 +27,25 @@ Two rules govern where golden state lives and how you regenerate it.
 - `make test-update` regenerates the goldens. Read the resulting diff before
   you commit it, because an unexpected change there usually means a behavior
   change.
+
+Cases with `input_metrics.txt` also capture `expected_metrics.prom` through
+`AddGolden`. Each case uses an isolated NICo API metrics registry. The snapshot
+checks metric names, help text, types, labels, and histogram bucket boundaries.
+Sample values are masked as `<variable>` because polling counts and request
+durations vary. These snapshots do not assert exact counts or durations.
+
+Cluster and machine cases can select a transport failure with
+`input_nico_transport.txt`. Use `tls-untrusted` to serve the stateful fake over
+HTTPS with an untrusted test certificate. Use `closed` to close the fake server
+before reconciliation. Both modes use the production NICo client. Omit the file
+to use the default HTTP server.
+
+Deletion cases include separate ready-to-pending and pending-to-deleted case
+sets. Each compares goldens only at its final state. Set
+`hold_instance_deletion: true` in `input_nico_objects.yaml` to record deletion
+requests while leaving a ready instance's NICo status unchanged.
+Use `input_initial_delete.yaml` to patch and delete a Kubernetes object before
+starting the reconcilers when the case starts with deletion already pending.
 
 ## CAPNICo Generation Invariants
 

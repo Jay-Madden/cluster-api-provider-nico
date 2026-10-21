@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -15,11 +16,24 @@ import (
 type ClientCache struct {
 	mu      sync.RWMutex
 	clients map[string]*Client
+	metrics *apiRequestMetrics
 }
 
 func NewClientCache() *ClientCache {
+	return newClientCache(apiMetrics)
+}
+
+// NewClientCacheWithRegistry registers isolated NICo API metrics in registry.
+func NewClientCacheWithRegistry(registry prometheus.Registerer) *ClientCache {
+	m := newAPIRequestMetrics()
+	registry.MustRegister(m.requests, m.duration)
+	return newClientCache(m)
+}
+
+func newClientCache(m *apiRequestMetrics) *ClientCache {
 	return &ClientCache{
 		clients: map[string]*Client{},
+		metrics: m,
 	}
 }
 
@@ -47,6 +61,7 @@ func (c *ClientCache) GetOrCreate(ctx context.Context, secret *corev1.Secret, cf
 	if err != nil {
 		return nil, err
 	}
+	client.metrics = c.metrics
 
 	for existingKey := range c.clients {
 		if len(existingKey) >= len(prefix) && existingKey[:len(prefix)] == prefix && existingKey != key {

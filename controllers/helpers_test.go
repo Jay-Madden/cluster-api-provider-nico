@@ -15,6 +15,8 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/expfmt"
 
 	nicosdk "github.com/NVIDIA/infra-controller/rest-api/sdk/standard"
 	corev1 "k8s.io/api/core/v1"
@@ -215,6 +217,25 @@ func startFake(server *fake.Server) string {
 	return endpoint.URL
 }
 
+func startFakeForCase(server *fake.Server, tc *fixture.Case) string {
+	mode, _ := tc.Input("input_nico_transport.txt")
+	var endpoint *httptest.Server
+	switch strings.TrimSpace(mode) {
+	case "":
+		return startFake(server)
+	case "tls-untrusted":
+		endpoint = httptest.NewTLSServer(server.Handler())
+	case "closed":
+		endpoint = httptest.NewServer(server.Handler())
+		endpoint.Close()
+	default:
+		ginkgo.Fail(fmt.Sprintf("unknown NICo transport mode %q", mode))
+		return ""
+	}
+	ginkgo.DeferCleanup(endpoint.Close)
+	return endpoint.URL
+}
+
 func pointIdentitySecretsAtFake(ctx context.Context, c client.Client, endpoint string) error {
 	for _, name := range []string{"nico-creds", "provider-power", testDefaultCredentials} {
 		secret := &corev1.Secret{}
@@ -346,7 +367,13 @@ func workloadKubeconfigWithExecProvider(server string) ([]byte, error) {
 
 // startReconcilers runs both reconcilers against the case's API server.
 func startReconcilers(ctx ginkgo.SpecContext, tc *fixture.Case, workloadFactory workloadClientFactory) {
-	defaultNicoClientCache = nico.NewClientCache()
+	registry := prometheus.NewRegistry()
+	defaultNicoClientCache = nico.NewClientCacheWithRegistry(registry)
+	if tc.HasInput("input_metrics.txt") {
+		tc.AddGolden("expected_metrics.prom", func(context.Context) (string, error) {
+			return dumpMetrics(registry)
+		})
+	}
 	mgr, err := manager.New(tc.Config, manager.Options{
 		Scheme:  tc.Scheme,
 		Metrics: metricsserver.Options{BindAddress: "0"},
@@ -365,4 +392,31 @@ func startReconcilers(ctx ginkgo.SpecContext, tc *fixture.Case, workloadFactory 
 	}).SetupWithManager(ctx, mgr)).To(gomega.Succeed())
 
 	tc.StartManager(ctx, mgr)
+}
+
+func dumpMetrics(registry prometheus.Gatherer) (string, error) {
+	families, err := registry.Gather()
+	if err != nil {
+		return "", fmt.Errorf("gather NICo API metrics: %w", err)
+	}
+	var raw strings.Builder
+	for _, family := range families {
+		if _, err := expfmt.MetricFamilyToText(&raw, family); err != nil {
+			return "", fmt.Errorf("encode NICo API metrics: %w", err)
+		}
+	}
+
+	// Polling counts and elapsed durations vary between reconciliations.
+	var normalized strings.Builder
+	normalized.WriteString("# Sample values are masked as <variable>.\n")
+	for line := range strings.SplitSeq(raw.String(), "\n") {
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "#") {
+			line = line[:strings.LastIndexByte(line, ' ')] + " <variable>"
+		}
+		normalized.WriteString(line + "\n")
+	}
+	return normalized.String(), nil
 }

@@ -1,0 +1,65 @@
+# Sample values are masked as <variable>.
+# HELP capnico_api_request_duration_seconds Duration of NICo SDK requests in seconds, including response decoding.
+# TYPE capnico_api_request_duration_seconds histogram
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.005"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.01"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.025"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.05"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.25"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="0.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="2.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="10"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="create_instance",status_code="400",le="+Inf"} <variable>
+capnico_api_request_duration_seconds_sum{operation="create_instance",status_code="400"} <variable>
+capnico_api_request_duration_seconds_count{operation="create_instance",status_code="400"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.005"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.01"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.025"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.05"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.25"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="0.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="2.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="10"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_current_tenant",status_code="200",le="+Inf"} <variable>
+capnico_api_request_duration_seconds_sum{operation="get_current_tenant",status_code="200"} <variable>
+capnico_api_request_duration_seconds_count{operation="get_current_tenant",status_code="200"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.005"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.01"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.025"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.05"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.25"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="0.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="2.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="10"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="get_instance_type",status_code="200",le="+Inf"} <variable>
+capnico_api_request_duration_seconds_sum{operation="get_instance_type",status_code="200"} <variable>
+capnico_api_request_duration_seconds_count{operation="get_instance_type",status_code="200"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.005"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.01"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.025"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.05"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.25"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="0.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="1"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="2.5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="5"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="10"} <variable>
+capnico_api_request_duration_seconds_bucket{operation="list_instances",status_code="200",le="+Inf"} <variable>
+capnico_api_request_duration_seconds_sum{operation="list_instances",status_code="200"} <variable>
+capnico_api_request_duration_seconds_count{operation="list_instances",status_code="200"} <variable>
+# HELP capnico_api_requests_total Total NICo API requests by operation and HTTP status code; none indicates no response.
+# TYPE capnico_api_requests_total counter
+capnico_api_requests_total{operation="create_instance",status_code="400"} <variable>
+capnico_api_requests_total{operation="get_current_tenant",status_code="200"} <variable>
+capnico_api_requests_total{operation="get_instance_type",status_code="200"} <variable>
+capnico_api_requests_total{operation="list_instances",status_code="200"} <variable>

@@ -102,13 +102,14 @@ type resourceCollection[T any] struct {
 }
 
 type serverSeed struct {
-	Tenants       resourceCollection[[]tenantDump]       `json:"tenants"`
-	InstanceTypes resourceCollection[[]instanceTypeDump] `json:"instance_types"`
-	Instances     resourceCollection[[]instanceDump]     `json:"instances"`
-	Machines      resourceCollection[[]machineDump]      `json:"machines"`
-	Sites         resourceCollection[[]siteDump]         `json:"sites"`
-	VPCs          resourceCollection[[]vpcDump]          `json:"vpcs"`
-	Requests      []requestRecord                        `json:"requests"`
+	HoldInstanceDeletion bool                                   `json:"hold_instance_deletion,omitempty"`
+	Tenants              resourceCollection[[]tenantDump]       `json:"tenants"`
+	InstanceTypes        resourceCollection[[]instanceTypeDump] `json:"instance_types"`
+	Instances            resourceCollection[[]instanceDump]     `json:"instances"`
+	Machines             resourceCollection[[]machineDump]      `json:"machines"`
+	Sites                resourceCollection[[]siteDump]         `json:"sites"`
+	VPCs                 resourceCollection[[]vpcDump]          `json:"vpcs"`
+	Requests             []requestRecord                        `json:"requests"`
 }
 
 type serverDump struct {
@@ -143,7 +144,8 @@ type Server struct {
 	sites         resourceCollection[map[string]*nicosdk.Site]
 	vpcs          resourceCollection[map[string]*nicosdk.VPC]
 
-	requests []requestRecord
+	requests             []requestRecord
+	holdInstanceDeletion bool
 
 	nextID             int
 	powerControlStatus int
@@ -329,6 +331,9 @@ func (s *Server) SeedFromYAML(input string) error {
 	if len(seed.Requests) != 0 {
 		return fmt.Errorf("fake server requests cannot be seeded")
 	}
+	s.mu.Lock()
+	s.holdInstanceDeletion = seed.HoldInstanceDeletion
+	s.mu.Unlock()
 
 	if len(seed.Tenants.Resources) == 0 {
 		s.SeedTenant("", nil, seed.Tenants.StatusCode)
@@ -830,8 +835,10 @@ func (s *Server) deleteInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "instance not found")
 		return
 	}
-	record.instance.SetStatus(nicosdk.INSTANCESTATUS_TERMINATING)
-	record.polls = 0
+	if !s.holdInstanceDeletion {
+		record.instance.SetStatus(nicosdk.INSTANCESTATUS_TERMINATING)
+		record.polls = 0
+	}
 	s.requests = append(s.requests, requestRecord{
 		Operation:  operationDeleteInstance,
 		Org:        org,

@@ -40,13 +40,6 @@ HTTPS with an untrusted test certificate. Use `closed` to close the fake server
 before reconciliation. Both modes use the production NICo client. Omit the file
 to use the default HTTP server.
 
-Deletion cases include separate ready-to-pending and pending-to-deleted case
-sets. Each compares goldens only at its final state. Set
-`hold_instance_deletion: true` in `input_nico_objects.yaml` to record deletion
-requests while leaving a ready instance's NICo status unchanged.
-Use `input_initial_delete.yaml` to patch and delete a Kubernetes object before
-starting the reconcilers when the case starts with deletion already pending.
-
 ## CAPNICo Generation Invariants
 
 Each case set settles at a known generation, so an unexpected generation is a

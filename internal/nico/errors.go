@@ -73,8 +73,7 @@ func normalizeConnectionError(ctx context.Context, err error) error {
 	}
 
 	cause := err
-	var urlError *url.Error
-	if errors.As(err, &urlError) {
+	if urlError, ok := errors.AsType[*url.Error](err); ok {
 		cause = urlError.Err
 	}
 	var networkError net.Error

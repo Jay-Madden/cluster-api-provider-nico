@@ -13,10 +13,10 @@ not join nodes — the kubeadm bootstrap and control-plane providers do that. Yo
 declare a `Cluster` and a `MachineDeployment` as usual, and this provider turns
 each requested machine into a NICo instance on real hardware.
 
-* `NicoCluster` holds the target site, and may optionally reference a per-cluster credentials Secret.
+* `NicoCluster` holds the target site, and can reference a per-cluster credentials Secret or a `NicoIdentity`.
 * `NicoMachine` represents one NICo instance managed by Cluster API, and carries the VPC.
 * `NicoMachineTemplate` supports `KubeadmControlPlane` and `MachineDeployment`.
-* `NicoIdentity` reports the health of the credentials Secret it names. The manager checks every Identity in its watch scope.
+* `NicoIdentity` reports the health of the credentials Secret it names, and can supply those credentials to clusters that name it. The manager checks every Identity in its watch scope.
 
 ## Features
 
@@ -195,33 +195,42 @@ export KUBECONFIG=/path/to/management-cluster.kubeconfig
 clusterctl init --bootstrap kubeadm --control-plane kubeadm
 ```
 
-Build and push the controller image you want to run:
+Install the published Helm chart. Each release publishes the chart and a
+multi-arch controller image to GHCR. The chart version is the release tag
+without the leading `v`, and the chart defaults to the matching controller
+image:
 
 ```bash
-make docker-build IMG=ghcr.io/your-org/cluster-api-provider-nico:latest
-```
-
-Update `config/manager/manager.yaml` to use that image, then install the provider:
-
-```bash
-kubectl apply -k config/default
-```
-
-Alternatively, install the native Helm chart and supply the same controller
-image without editing the Kustomize source:
-
-```bash
-helm upgrade --install capi-provider-nico ./chart \
+helm upgrade --install capi-provider-nico \
+  oci://ghcr.io/dsx-ai-factory/cluster-api-provider-nico/charts/capi-provider-nico \
+  --version 0.0.45 \
   --namespace capnico-system \
   --create-namespace \
-  --set manager.image.repository=ghcr.io/your-org/cluster-api-provider-nico \
-  --set manager.image.tag=latest \
   --wait
 ```
 
-See the [chart documentation](chart/README.md) for published chart locations,
-configuration values, and compatibility notes for upgrading an existing Helm
-release.
+For production, pin the controller image by digest, and set the CA bundle and
+proxy settings your site needs. See
+[Path C in the getting-started guide](docs/getting-started.md#path-c-production-against-an-existing-nico-site).
+
+To run an unreleased build, build and push your own image, then point the chart
+at it:
+
+```bash
+make docker-buildx IMG=<your-registry>/cluster-api-provider-nico/controller:<tag> \
+  PLATFORMS=linux/amd64,linux/arm64
+
+helm upgrade --install capi-provider-nico ./chart \
+  --namespace capnico-system \
+  --create-namespace \
+  --set manager.image.repository=<your-registry>/cluster-api-provider-nico/controller \
+  --set manager.image.tag=<tag> \
+  --wait
+```
+
+See the [chart documentation](chart/README.md) for every published chart
+location, configuration values, and compatibility notes for upgrading an
+existing Helm release.
 
 ## Provider release artifacts
 
@@ -231,7 +240,7 @@ CAPNICo publishes Cluster API provider artifacts in the same shape consumed by
 Generate the local artifacts with the controller image you want to publish:
 
 ```bash
-CONTROLLER_IMG=ghcr.io/dsx-ai-factory/cluster-api-provider-nico/controller:v0.0.43 \
+CONTROLLER_IMG=ghcr.io/dsx-ai-factory/cluster-api-provider-nico/controller:v0.0.45 \
 make release-manifests
 ```
 
@@ -258,13 +267,13 @@ does not specify one explicitly:
 providers:
   - name: nico
     type: InfrastructureProvider
-    url: https://github.com/dsx-ai-factory/cluster-api-provider-nico/releases/download/v0.0.43/infrastructure-components.yaml
+    url: https://github.com/dsx-ai-factory/cluster-api-provider-nico/releases/download/v0.0.45/infrastructure-components.yaml
 ```
 
 Then initialize the provider:
 
 ```bash
-clusterctl init --infrastructure nico:v0.0.43
+clusterctl init --infrastructure nico:v0.0.45
 ```
 
 ### Controller scope
@@ -302,7 +311,11 @@ present at the same time:
    `NicoCluster` that does not set its own `spec.identityRef`.
 2. A per-cluster Secret referenced by `NicoCluster.spec.identityRef`, in the
    same namespace as the `NicoCluster`. When set, it overrides the
-   provider-level Secret for that `NicoCluster`.
+   provider-level Secret for that `NicoCluster`. The reference names the
+   Secret directly, or, with `kind: NicoIdentity`, names a `NicoIdentity` in
+   that namespace whose `credentialsRef` names the Secret. A reference that
+   cannot be resolved never falls back to the provider-level Secret. Refer to
+   [credentials through a NicoIdentity](docs/api-reference.md#credentials-through-a-nicoidentity).
 
 The provider-level Secret's name and namespace are configurable via two manager flags:
 

@@ -78,7 +78,7 @@ func nicoMachineCaseSet(description, dirPrefix string, defineSteps func(*fixture
 				return server.Dump()
 			})
 
-			endpoint := startFake(server)
+			endpoint := startFakeForCase(server, tc)
 			gomega.Expect(pointIdentitySecretsAtFake(ctx, tc.Client, endpoint)).To(gomega.Succeed())
 			startReconcilers(ctx, tc, workloadFactory)
 		},

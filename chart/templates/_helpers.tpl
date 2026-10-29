@@ -68,20 +68,13 @@ Controller manager image reference.
   digest; the tag (default Chart.appVersion) is informational only.
 - repository already pinned with "@": repository unchanged.
 - otherwise: repository:tag, with tag defaulting to Chart.appVersion.
-Fails when digest is not sha256:<64 lowercase hex> or is combined with a
-repository that already contains "@".
+values.schema.json validates the digest format and rejects a digest combined
+with a repository that already contains "@", so helm lint catches both.
 */}}
 {{- define "cluster-api-provider-nico.managerImage" -}}
 {{- $image := .Values.manager.image }}
-{{- $digest := $image.digest | default "" }}
-{{- if $digest }}
-{{- if contains "@" $image.repository }}
-{{- fail "manager.image.digest cannot be combined with a manager.image.repository that already contains \"@\"; set only one of them" }}
-{{- end }}
-{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $digest) }}
-{{- fail (printf "manager.image.digest must be sha256:<64 lowercase hex characters>, got %q" $digest) }}
-{{- end }}
-{{- printf "%s:%s@%s" $image.repository ($image.tag | default .Chart.AppVersion) $digest }}
+{{- if $image.digest }}
+{{- printf "%s:%s@%s" $image.repository ($image.tag | default .Chart.AppVersion) $image.digest }}
 {{- else if contains "@" $image.repository }}
 {{- $image.repository }}
 {{- else }}

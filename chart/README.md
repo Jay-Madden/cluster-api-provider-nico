@@ -98,8 +98,10 @@ only. You can supply the repository at install time and the digest
 separately, which suits packaging that knows the image digest but not the
 registry a site pulls from. The digest must have the form `sha256:` followed by 64 lowercase hexadecimal
 characters. A `manager.image.repository` that already ends in `@<digest>`
-still renders unchanged. The render fails when the digest is malformed or
-when both values carry a digest. For example:
+still renders unchanged. The chart's `values.schema.json` rejects a malformed
+or non-string digest, and a digest combined with such a repository, so
+`helm lint`, `helm template`, and `helm install` all fail on these values.
+For example:
 
 ```bash
 helm upgrade --install capi-provider-nico ./chart \

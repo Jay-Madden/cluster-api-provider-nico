@@ -74,6 +74,10 @@ with a repository that already contains "@", so helm lint catches both.
 {{- define "cluster-api-provider-nico.managerImage" -}}
 {{- $image := .Values.manager.image }}
 {{- if $image.digest }}
+{{- /* Repeats the schema rule so --skip-schema-validation cannot render two "@" separators. */}}
+{{- if contains "@" $image.repository }}
+{{- fail "manager.image.digest cannot be combined with a manager.image.repository that already contains \"@\"; set only one of them" }}
+{{- end }}
 {{- printf "%s:%s@%s" $image.repository ($image.tag | default .Chart.AppVersion) $image.digest }}
 {{- else if contains "@" $image.repository }}
 {{- $image.repository }}
